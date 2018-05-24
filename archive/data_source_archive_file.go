@@ -11,6 +11,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform/helper/hashcode"
 	"github.com/hashicorp/terraform/helper/schema"
@@ -85,6 +87,12 @@ func dataSourceFile() *schema.Resource {
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
 				},
+			},
+			"chmod": {
+				Optional: true,
+				ForceNew: true,
+				Type:     schema.TypeMap,
+				Elem:     schema.TypeString,
 			},
 			"output_path": {
 				Type:     schema.TypeString,
@@ -171,6 +179,11 @@ func archive(d *schema.ResourceData) error {
 		return fmt.Errorf("archive type not supported: %s", archiveType)
 	}
 
+	if chmods, ok := d.GetOk("chmod"); ok {
+		chmod := chmods.(map[string]interface{})
+		archiver.SetFileModifier(chmodModifier(chmod))
+	}
+
 	if dir, ok := d.GetOk("source_dir"); ok {
 		if excludes, ok := d.GetOk("excludes"); ok {
 			excludeList := expandStringList(excludes.(*schema.Set).List())
@@ -227,4 +240,19 @@ func genFileShas(filename string) (string, string, string, error) {
 	md5Sum := hex.EncodeToString(md5.Sum(nil))
 
 	return sha1, sha256base64, md5Sum, nil
+}
+
+func chmodModifier(chmods map[string]interface{}) FileModifier {
+	return func(filename string, mode os.FileMode) os.FileMode {
+		existing, ok := chmods[filename]
+		if !ok {
+			return mode
+		}
+		raw, _ := existing.(string)
+		raw64, err := strconv.ParseUint(strings.TrimPrefix(raw, "0x"), 16, 32)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+		return os.FileMode(raw64)
+	}
 }

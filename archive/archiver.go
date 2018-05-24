@@ -5,7 +5,10 @@ import (
 	"os"
 )
 
+type FileModifier func(filename string, mode os.FileMode) os.FileMode
+
 type Archiver interface {
+	SetFileModifier(modifier FileModifier)
 	ArchiveContent(content []byte, infilename string) error
 	ArchiveFile(infilename string) error
 	ArchiveDir(indirname string, excludes []string) error

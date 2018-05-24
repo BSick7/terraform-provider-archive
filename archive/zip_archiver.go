@@ -14,12 +14,24 @@ type ZipArchiver struct {
 	filepath   string
 	filewriter *os.File
 	writer     *zip.Writer
+	fmodifier  *FileModifier
 }
 
 func NewZipArchiver(filepath string) Archiver {
 	return &ZipArchiver{
 		filepath: filepath,
 	}
+}
+
+func (a *ZipArchiver) SetFileModifier(modifier FileModifier) {
+	a.fmodifier = &modifier
+}
+
+func (a *ZipArchiver) getFileMode(filename string, mode os.FileMode) os.FileMode {
+	if a.fmodifier == nil {
+		return mode
+	}
+	return (*a.fmodifier)(filename, mode)
 }
 
 func (a *ZipArchiver) ArchiveContent(content []byte, infilename string) error {
@@ -61,6 +73,7 @@ func (a *ZipArchiver) ArchiveFile(infilename string) error {
 	fh.Method = zip.Deflate
 	// fh.Modified alone isn't enough when using a zero value
 	fh.SetModTime(time.Time{})
+	fh.SetMode(a.getFileMode(fh.Name, fh.Mode()))
 
 	f, err := a.writer.CreateHeader(fh)
 	if err != nil {
@@ -131,6 +144,7 @@ func (a *ZipArchiver) ArchiveDir(indirname string, excludes []string) error {
 		fh.Method = zip.Deflate
 		// fh.Modified alone isn't enough when using a zero value
 		fh.SetModTime(time.Time{})
+		fh.SetMode(a.getFileMode(fh.Name, fh.Mode()))
 
 		f, err := a.writer.CreateHeader(fh)
 		if err != nil {
